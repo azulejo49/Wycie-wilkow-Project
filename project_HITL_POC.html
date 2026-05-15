@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Wycie Wilków - POC Ecosystem</title>
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: white; overflow: hidden;}
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* Glassmorphism Sidebar */
+        #sidebar {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 380px;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            z-index: 2;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Terminal Overlay for AI logs */
+        #terminal {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 400px;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #34d399;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            color: #34d399;
+            z-index: 2;
+            overflow-y: hidden;
+            box-shadow: 0 0 15px rgba(52, 211, 153, 0.2);
+            transition: border-color 0.3s;
+        }
+        .log-entry { margin-bottom: 5px; opacity: 0; animation: fadeIn 0.5s forwards; }
+        @keyframes fadeIn { to { opacity: 1; } }
+        .log-warn { color: #f59e0b; }
+        .log-crit { color: #ef4444; }
+        .log-success { color: #10b981; }
+
+        /* Dynamic Coordinate HUD */
+        #coordinate-hud {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 15px 20px;
+            font-family: 'Courier New', Courier, monospace;
+            color: #0ea5e9;
+            z-index: 2;
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.3);
+            text-align: right;
+            backdrop-filter: blur(5px);
+            min-width: 250px;
+            transition: all 0.3s;
+        }
+        .coord-label { font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px; letter-spacing: 1px;}
+        #coord-values { font-size: 1.2rem; font-weight: bold; text-shadow: 0 0 5px rgba(14, 165, 233, 0.5);}
+
+        /* Intervention Workflow Panel */
+        #action-panel {
+            position: absolute;
+            top: 110px;
+            right: 20px;
+            width: 350px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid #f59e0b;
+            border-radius: 12px;
+            padding: 20px;
+            z-index: 2;
+            box-shadow: 0 0 25px rgba(245, 158, 11, 0.2);
+            backdrop-filter: blur(10px);
+            display: none; /* Hidden until domain selected */
+            flex-direction: column;
+            animation: slideIn 0.4s ease-out;
+        }
+        @keyframes slideIn { from { transform: translateX(50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        .panel-header { color: #f59e0b; font-weight: bold; border-bottom: 1px solid rgba(245, 158, 11, 0.3); padding-bottom: 10px; margin-bottom: 15px; font-size: 0.9rem; letter-spacing: 1px;}
+        .data-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px;}
+        .data-value { font-size: 0.85rem; color: #f1f5f9; margin-bottom: 15px; line-height: 1.4;}
+        
+        .action-buttons { display: flex; gap: 10px; margin-top: 5px; }
+        .btn-execute { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; color: #10b981; padding: 12px; flex: 1; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-family: inherit;}
+        .btn-execute:hover { background: rgba(16, 185, 129, 0.3); box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);}
+        .btn-decline { background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; color: #ef4444; padding: 12px; flex: 1; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; font-family: inherit;}
+        .btn-decline:hover { background: rgba(239, 68, 68, 0.3); box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);}
+
+        .logo-container { margin-bottom: 20px; }
+        .system-status { display: flex; align-items: center; font-size: 0.8rem; color: #94a3b8; margin-bottom: 20px; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+        .status-dot { width: 10px; height: 10px; background: #10b981; border-radius: 50%; margin-right: 10px; box-shadow: 0 0 10px #10b981; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+
+        /* Domain Buttons */
+        .domain-btn { display: block; width: 100%; text-align: left; background: rgba(30, 41, 59, 0.7); border: 1px solid #334155; padding: 15px; margin-bottom: 10px; border-radius: 8px; color: #f1f5f9; cursor: pointer; transition: all 0.3s ease; }
+        .domain-btn:hover { background: rgba(52, 211, 153, 0.1); border-color: #34d399; transform: translateX(5px); }
+        .domain-title { font-weight: bold; font-size: 1rem; margin-bottom: 5px; display: flex; align-items: center;}
+        .domain-desc { font-size: 0.8rem; color: #94a3b8; line-height: 1.4; }
+        .marker-svg { width: 40px; height: 40px; filter: drop-shadow(0 0 8px rgba(255,255,255,0.3)); }
+        .hud-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1; box-shadow: inset 0 0 100px rgba(0,0,0,0.8); }
+    </style>
+</head>
+<body>
+
+<div class="hud-overlay"></div>
+
+<div id="coordinate-hud">
+    <div class="coord-label">ORBITAL TELEMETRY FOCUS</div>
+    <div id="coord-values">51.9194° N | 19.1451° E</div>
+</div>
+
+<div id="action-panel">
+    <div class="panel-header">⚠️ AI INTERVENTION REQUEST</div>
+    
+    <div class="data-label">Identified Issue</div>
+    <div class="data-value" id="ap-issue">Awaiting telemetry...</div>
+    
+    <div class="data-label">Recommended Mitigation</div>
+    <div class="data-value" id="ap-mitigation" style="color: #34d399;">Awaiting AI synthesis...</div>
+    
+    <div class="action-buttons">
+        <button class="btn-execute" onclick="executeMitigation()">EXECUTE</button>
+        <button class="btn-decline" onclick="declineMitigation()">DECLINE</button>
+    </div>
+</div>
+
+<div id="sidebar">
+    <div class="logo-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120" width="100%" height="auto">
+            <rect width="600" height="120" rx="18" fill="#0f172a"/>
+            <g transform="translate(20,20) scale(0.15)">
+                <path fill="#34d399" d="M255.563 22.094c-126.81 0-229.594 102.784-229.594 229.594 0 25.4 4.132 49.846 11.75 72.687 40.154-24.203 76.02-41.17 107.56-52.03-35.752 5.615-66.405 23.66-109.843 4 31.552-27.765 87.682-65.842 138.532-71.658 26.58-21.615 68.113-43.962 89.655-37.28 30.492-26.873 67.982-61.093 108.125-85.75 10.667 16.156 17.124 35.94 12.563 57.874-80.37 20.205-61.692 148.928 13.468 67.44 6.348 13.064 9.41 26.665 9.095 41.436-32.675 33.83-66.97 63.026-101.938 87.906.466 23.99-5.605 52.915-19 84.813-5.635 13.42-7.33 36.406 22.875 53.97 101.14-24.012 176.375-114.924 176.375-223.408 0-126.81-102.815-229.593-229.625-229.593zm3.312 164.375c-17.835 2.22-32.794 9.046-45.844 18.968 12.083-.036 25.612 2.882 37.5 6.156 6.208-6.698 10.236-18.52 8.345-25.125z"/>
+            </g>
+            <text x="120" y="65" font-family="Arial, sans-serif" font-size="28" fill="white">Wycie-wilków</text>
+            <text x="515" y="40" font-family="Arial, sans-serif" font-size="14" fill="#9ca3af">™</text>
+            <text x="120" y="90" font-family="Arial, sans-serif" font-size="14" fill="#9ca3af">Odrodzenie-The Unified Polish Masterplan</text>
+        </svg>
+    </div>
+    
+    <div class="system-status">
+        <div class="status-dot"></div>
+        <div>CENTRAL AI ORCHESTRATOR: ONLINE<br>Operating in Sovereign Mode</div>
+    </div>
+
+    <button class="domain-btn" onclick="flyToDomain('wilk')">
+        <div class="domain-title">🌲 1. Wilk (Primeval Forest)</div>
+        <div class="domain-desc">Białowieża: Satellite & Acoustic Edge AI monitoring. Initiate Sentinel-2 scan sequence.</div>
+    </button>
+
+    <button class="domain-btn" onclick="flyToDomain('zubr')">
+        <div class="domain-title">💧 2. Żubr (Hydrological Lifelines)</div>
+        <div class="domain-desc">Masovian Plains: Active IoT Zastawki weirs. Dynamic water flow adjustment.</div>
+    </button>
+
+    <button class="domain-btn" onclick="flyToDomain('dzieciolek')">
+        <div class="domain-title">⛰️ 3. Dzięciołek (Industrial Detox)</div>
+        <div class="domain-desc">Upper Silesia: Phytoremediation drone swarm deployment targeting toxic Hałdy.</div>
+    </button>
+
+    <button class="domain-btn" onclick="flyToDomain('los')">
+        <div class="domain-title">🌊 4. Łoś (Baltic Defense)</div>
+        <div class="domain-desc">Pomeranian Coast: AUV reef seeding & hydrodynamic coastal buffering.</div>
+    </button>
+    
+    <button class="domain-btn" style="background: rgba(15, 23, 42, 0.9); border-color: #64748b; text-align: center; margin-top: 20px;" onclick="resetView()">
+        [ RESET MASTERPLAN VIEW ]
+    </button>
+</div>
+
+<div id="terminal" id="ai-logs">
+    <div style="border-bottom: 1px solid #0f766e; margin-bottom: 10px; padding-bottom: 5px;">> ROOT_TERMINAL // ODRODZENIE_OS_V1.4</div>
+    <div id="log-container"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    // System Terminal Logic
+    const logLines = [
+        "[SYS] Initializing Sentinel-2 hyperspectral handshake...",
+        "[SYS] Secure uplink established with IMGW databases.",
+        "[AI] Analyzing national hydrological deficit...",
+        "<span class='log-warn'>[WARN] Ground water level critical in Masovian sector.</span>",
+        "[SYS] Passive acoustic monitoring nominal in Białowieża.",
+        "<span class='log-warn'>[WARN] Baltic nitrate levels elevated. AUV deployment recommended.</span>"
+    ];
+    
+    const logContainer = document.getElementById('log-container');
+    let logIndex = 0;
+
+    function pushLog(textOverride = null) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        
+        if (textOverride) {
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: "numeric", minute: "numeric", second: "numeric"});
+            div.innerHTML = `[${time}] ${textOverride}`;
+        } else {
+            div.innerHTML = logLines[logIndex];
+            logIndex = (logIndex + 1) % logLines.length;
+        }
+        
+        logContainer.appendChild(div);
+        if (logContainer.children.length > 7) {
+            logContainer.removeChild(logContainer.firstChild);
+        }
+        // Auto scroll to bottom
+        document.getElementById('terminal').scrollTop = document.getElementById('terminal').scrollHeight;
+    }
+
+    setInterval(() => pushLog(), 4500);
+
+    // Initialize MapLibre GL JS
+    const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+        center: [19.1451, 51.9194],
+        zoom: 5.8,
+        pitch: 30,
+        bearing: 0,
+        antialias: true
+    });
+
+    const coordValuesDisplay = document.getElementById('coord-values');
+    map.on('move', () => {
+        const center = map.getCenter();
+        const lat = center.lat;
+        const lng = center.lng;
+        const formattedLat = Math.abs(lat).toFixed(4);
+        const formattedLng = Math.abs(lng).toFixed(4);
+        const latDir = lat >= 0 ? 'N' : 'S';
+        const lngDir = lng >= 0 ? 'E' : 'W';
+        coordValuesDisplay.innerHTML = `${formattedLat}° ${latDir} | ${formattedLng}° ${lngDir}`;
+    });
+
+    const ALL_DOMAIN_LAYERS = ['wilk-radar', 'zubr-nodes', 'dzieciolek-heaps', 'los-reefs'];
+
+    // Updated Data Structure with Issue/Mitigation Workflows
+    const domainsData = {
+        'wilk': { 
+            center: [23.866, 52.716], zoom: 12, pitch: 60, bearing: 45, 
+            log: "<span class='log-warn'>[WARN] Acoustic anomaly detected in Sector 7.</span>",
+            layers: ['wilk-radar'],
+            issue: "High water-stress detected via Sentinel-2. AudioMoth edge nodes confirm bark beetle ultrasonic chewing signatures.",
+            mitigation: "Dispatch Autonomous Ground Vehicle (AGV) for surgical dead-wood extraction. Monitor Natura 2000 buffer zones."
+        },
+        'zubr': { 
+            center: [21.012, 52.229], zoom: 11, pitch: 55, bearing: -20, 
+            log: "<span class='log-warn'>[WARN] Stream velocity exceeding retention threshold.</span>",
+            layers: ['zubr-nodes'],
+            issue: "Rapid snowmelt runoff detected. IMGW forecasts 14-day dry spell, threatening local agriculture.",
+            mitigation: "Actuate Zastawki (woven-wood weirs) Nodes 1-45 to 'CLOSED' state. Trigger decentralized aquifer recharge protocols."
+        },
+        'dzieciolek': { 
+            center: [19.023, 50.264], zoom: 13, pitch: 65, bearing: 110, 
+            log: "<span class='log-warn'>[WARN] Soil toxicity threshold exceeded on Hałda #4.</span>",
+            layers: ['dzieciolek-heaps'],
+            issue: "Chemical ML models predict heavy metal leaching into local groundwater following recent rainfall.",
+            mitigation: "Launch drone swarms. Spray bio-mixture of native hyper-accumulating willows and mycorrhizal fungi to lock down toxins."
+        },
+        'los': { 
+            center: [18.646, 54.352], zoom: 11.5, pitch: 50, bearing: -40, 
+            log: "<span class='log-warn'>[WARN] Winter storm surge projected in 72 hours.</span>",
+            layers: ['los-reefs'],
+            issue: "Hydrodynamic modeling indicates severe coastal erosion risk alongside elevated nitrate levels.",
+            mitigation: "Deploy AUVs to 3D-print willow fascine reefs. Seed structures with Baltic Blue Mussels for bio-filtration."
+        },
+        'reset': { 
+            center: [19.1451, 51.9194], zoom: 5.8, pitch: 30, bearing: 0, 
+            log: "[SYS] Returning to Macro-Observational State.",
+            layers: []
+        }
+    };
+
+    const animalSVGs = {
+        'wilk': `<svg class="marker-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="#94a3b8" d="M45,20 L50,10 L55,20 L65,25 L70,40 L65,55 L55,60 L50,80 L45,60 L35,55 L30,40 L35,25 Z"/><circle cx="45" cy="35" r="3" fill="#ef4444"/><circle cx="55" cy="35" r="3" fill="#ef4444"/></svg>`,
+        'zubr': `<svg class="marker-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="#a855f7" d="M20,60 C20,30 40,20 60,30 C80,40 80,60 80,60 L80,80 L65,80 L65,65 L35,65 L35,80 L20,80 Z"/><path fill="#a855f7" d="M70,30 L85,20 L80,40 Z"/></svg>`,
+        'dzieciolek': `<svg class="marker-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="#ef4444" d="M40,20 C50,10 60,20 60,30 C60,40 50,50 40,50 Z"/><path fill="#94a3b8" d="M40,50 C50,60 60,80 50,90 C40,100 20,80 30,60 Z"/><path fill="#f59e0b" d="M60,25 L80,25 L65,30 Z"/></svg>`,
+        'los': `<svg class="marker-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill="#22c55e" d="M40,40 L60,40 L65,60 L35,60 Z"/><path fill="#22c55e" d="M20,20 L40,40 L30,50 Z"/><path fill="#22c55e" d="M80,20 L60,40 L70,50 Z"/></svg>`
+    };
+
+    map.on('load', () => {
+        Object.keys(animalSVGs).forEach(key => {
+            const el = document.createElement('div');
+            el.innerHTML = animalSVGs[key];
+            new maplibregl.Marker(el).setLngLat(domainsData[key].center).addTo(map);
+        });
+
+        // WILK
+        map.addSource('wilk-source', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [23.866, 52.716] } } });
+        map.addLayer({ 'id': 'wilk-radar', 'type': 'circle', 'source': 'wilk-source', 'layout': { 'visibility': 'none' }, 'paint': { 'circle-radius': 120, 'circle-color': '#10b981', 'circle-opacity': 0.2, 'circle-stroke-width': 2, 'circle-stroke-color': '#10b981' } });
+
+        // ZUBR
+        map.addSource('zubr-source', { 'type': 'geojson', 'data': { 'type': 'FeatureCollection', 'features': [ { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [21.012, 52.229] } }, { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [21.030, 52.210] } }, { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [20.990, 52.240] } } ] } });
+        map.addLayer({ 'id': 'zubr-nodes', 'type': 'circle', 'source': 'zubr-source', 'layout': { 'visibility': 'none' }, 'paint': { 'circle-radius': 25, 'circle-color': '#a855f7', 'circle-opacity': 0.4, 'circle-stroke-width': 1, 'circle-stroke-color': '#a855f7' } });
+
+        // DZIECIOLEK
+        map.addSource('dzieciolek-source', { 'type': 'geojson', 'data': { 'type': 'FeatureCollection', 'features': [ { 'type': 'Feature', 'geometry': { 'type': 'Polygon', 'coordinates': [[[19.02, 50.26], [19.04, 50.26], [19.04, 50.28], [19.02, 50.28], [19.02, 50.26]]] } } ] } });
+        map.addLayer({ 'id': 'dzieciolek-heaps', 'type': 'fill-extrusion', 'source': 'dzieciolek-source', 'layout': { 'visibility': 'none' }, 'paint': { 'fill-extrusion-color': '#ef4444', 'fill-extrusion-height': 500, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.6 } });
+
+        // LOS
+        map.addSource('los-source', { 'type': 'geojson', 'data': { 'type': 'Feature', 'geometry': { 'type': 'LineString', 'coordinates': [[18.5, 54.4], [18.646, 54.352], [18.8, 54.35]] } } });
+        map.addLayer({ 'id': 'los-reefs', 'type': 'line', 'source': 'los-source', 'layout': { 'visibility': 'none' }, 'paint': { 'line-color': '#0ea5e9', 'line-width': 8, 'line-opacity': 0.6, 'line-blur': 2 } });
+    });
+
+    // --- WORKFLOW LOGIC ---
+    let currentDomainSelection = null;
+
+    function flyToDomain(domainKey) {
+        const config = domainsData[domainKey];
+        currentDomainSelection = domainKey;
+
+        // Hide all layers, then show specific
+        ALL_DOMAIN_LAYERS.forEach(layer => { if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', 'none'); });
+        if (config.layers) { config.layers.forEach(layer => { if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', 'visible'); }); }
+
+        map.flyTo({ center: config.center, zoom: config.zoom, pitch: config.pitch, bearing: config.bearing, duration: 3500, essential: true });
+        pushLog(config.log);
+
+        // Update UI panels
+        const actionPanel = document.getElementById('action-panel');
+        if (domainKey === 'reset') {
+            actionPanel.style.display = 'none';
+        } else {
+            document.getElementById('ap-issue').innerText = config.issue;
+            document.getElementById('ap-mitigation').innerText = config.mitigation;
+            // Delay the appearance slightly for cinematic effect
+            setTimeout(() => { actionPanel.style.display = 'flex'; }, 1000);
+        }
+
+        // HUD Styling Flashes
+        document.getElementById('coordinate-hud').style.borderColor = "#f59e0b";
+        document.getElementById('coordinate-hud').style.color = "#f59e0b";
+        setTimeout(() => { 
+            document.getElementById('coordinate-hud').style.borderColor = "#0ea5e9";
+            document.getElementById('coordinate-hud').style.color = "#0ea5e9";
+        }, 1500);
+    }
+
+    function executeMitigation() {
+        if(!currentDomainSelection) return;
+        pushLog(`<span class='log-success'>[AUTHORIZED] Dispatching infrastructure protocol to ${currentDomainSelection.toUpperCase()} sector.</span>`);
+        document.getElementById('action-panel').style.display = 'none';
+        
+        // Visual confirmation in terminal
+        document.getElementById('terminal').style.borderColor = "#10b981";
+        document.getElementById('terminal').style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
+        setTimeout(() => { 
+            document.getElementById('terminal').style.borderColor = "#34d399"; 
+            document.getElementById('terminal').style.boxShadow = "0 0 15px rgba(52, 211, 153, 0.2)";
+        }, 1500);
+    }
+
+    function declineMitigation() {
+        if(!currentDomainSelection) return;
+        pushLog(`<span class='log-crit'>[DECLINED] AI Protocol aborted by human operator. Intervention canceled.</span>`);
+        document.getElementById('action-panel').style.display = 'none';
+        
+        // Visual denial in terminal
+        document.getElementById('terminal').style.borderColor = "#ef4444";
+        document.getElementById('terminal').style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.4)";
+        setTimeout(() => { 
+            document.getElementById('terminal').style.borderColor = "#34d399"; 
+            document.getElementById('terminal').style.boxShadow = "0 0 15px rgba(52, 211, 153, 0.2)";
+        }, 1500);
+    }
+
+    function resetView() {
+        flyToDomain('reset');
+    }
+</script>
+
+</body>
+</html>

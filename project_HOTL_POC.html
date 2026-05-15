@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wycie Wilków - 3D Ecosystem AI</title>
+
+    <link href="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.3.1/dist/maplibre-gl.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; height: 100vh; background-color: #0f172a; color: #f8fafc; }
+        
+        #sidebar { width: 420px; background-color: #1e293b; padding: 20px; box-shadow: 4px 0 15px rgba(0,0,0,0.5); z-index: 1000; display: flex; flex-direction: column; border-right: 1px solid #334155; }
+
+        /* Integrated User Logo */
+        .brand-banner { margin-bottom: 20px; display: flex; justify-content: center; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        .brand-banner svg { width: 100%; height: auto; max-width: 380px; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .stat-box { background-color: #0f172a; border: 1px solid #334155; padding: 10px; border-radius: 6px; text-align: center; }
+        .stat-box .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-box .value { font-size: 16px; font-weight: bold; color: #38bdf8; margin-top: 5px; transition: color 0.3s; }
+
+        /* Console Area */
+        .console-header { font-size: 12px; color: #cbd5e1; text-transform: uppercase; font-weight: bold; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;}
+        #console-area { flex-grow: 1; background-color: #020617; border: 1px solid #334155; border-radius: 6px; padding: 12px; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #10b981; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); }
+        .console-msg { padding-bottom: 4px; border-bottom: 1px solid #1e293b; }
+        .msg-time { color: #64748b; }
+        .msg-alert { color: #ef4444; font-weight: bold; }
+        .msg-action { color: #38bdf8; }
+        .msg-success { color: #10b981; }
+
+        .simulate-btn { margin-top: 20px; background-color: #10b981; color: #0f172a; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; font-size: 14px; transition: 0.3s; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2); }
+        .simulate-btn:hover { background-color: #059669; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(16, 185, 129, 0.4); }
+        .simulate-btn:disabled { background-color: #475569; cursor: not-allowed; transform: none; box-shadow: none; color: #94a3b8; }
+
+        #map { flex-grow: 1; height: 100%; }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="brand-banner">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 120">
+              <rect width="600" height="120" rx="18" fill="#0f172a"/>
+              <g transform="translate(20,20) scale(0.15)">
+                <path fill="#34d399" d="M255.563 22.094c-126.81 0-229.594 102.784-229.594 229.594 0 25.4 4.132 49.846 11.75 72.687 40.154-24.203 76.02-41.17 107.56-52.03-35.752 5.615-66.405 23.66-109.843 4 31.552-27.765 87.682-65.842 138.532-71.658 26.58-21.615 68.113-43.962 89.655-37.28 30.492-26.873 67.982-61.093 108.125-85.75 10.667 16.156 17.124 35.94 12.563 57.874-80.37 20.205-61.692 148.928 13.468 67.44 6.348 13.064 9.41 26.665 9.095 41.436-32.675 33.83-66.97 63.026-101.938 87.906.466 23.99-5.605 52.915-19 84.813-5.635 13.42-7.33 36.406 22.875 53.97 101.14-24.012 176.375-114.924 176.375-223.408 0-126.81-102.815-229.593-229.625-229.593zm3.312 164.375c-17.835 2.22-32.794 9.046-45.844 18.968 12.083-.036 25.612 2.882 37.5 6.156 6.208-6.698 10.236-18.52 8.345-25.125z"/>
+              </g>
+              <text x="120" y="65" font-family="Arial, sans-serif" font-weight="bold" font-size="32" fill="white">
+                Wycie Wilków
+              </text>
+              <text x="345" y="45" font-family="Arial, sans-serif" font-size="16" fill="#9ca3af">™</text>
+              <text x="120" y="95" font-family="monospace" font-size="14" fill="#9ca3af">
+                Odrodzenie - The Polish Masterplan
+              </text>
+            </svg>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="stat-box">
+                <div class="label">Sylva (Forest)</div>
+                <div class="value" id="stat-sylva">Stable</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Woda (Hydrology)</div>
+                <div class="value" id="stat-woda">Stable</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Ziemia (Soil)</div>
+                <div class="value" id="stat-ziemia">Stable</div>
+            </div>
+            <div class="stat-box">
+                <div class="label">Morze (Marine)</div>
+                <div class="value" id="stat-morze">Stable</div>
+            </div>
+        </div>
+
+        <div class="console-header">
+            <span>Live Telemetry Engine</span>
+            <span id="ai-status" style="color: #10b981;">● ONLINE</span>
+        </div>
+        
+        <div id="console-area">
+            <div class="console-msg"><span class="msg-time">[SYS]</span> 3D Map Engine initialized.</div>
+            <div class="console-msg"><span class="msg-time">[SYS]</span> Polish Biome Vectors loaded.</div>
+        </div>
+
+        <button id="sim-btn" class="simulate-btn" onclick="runNationalSimulation()">Initiate National Scan</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // Initialize MapLibre GL 3D Map
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', // Dark vector basemap
+            center: [19.1451, 51.9194],
+            zoom: 5.8,
+            pitch: 50, // 3D Tilt Angle
+            bearing: 10 // Slight rotation
+        });
+
+        // Biome Data as GeoJSON
+        const biomesGeoJSON = {
+            'type': 'FeatureCollection',
+            'features': [
+                { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [23.8, 52.7] }, 'properties': { 'name': 'Białowieża (Sylva)' } },
+                { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [20.0, 52.2] }, 'properties': { 'name': 'Masovian Plains (Woda)' } },
+                { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [19.0, 50.2] }, 'properties': { 'name': 'Silesian Hałdy (Ziemia)' } },
+                { 'type': 'Feature', 'geometry': { 'type': 'Point', 'coordinates': [19.0, 54.5] }, 'properties': { 'name': 'Baltic Coast (Morze)' } }
+            ]
+        };
+
+        map.on('load', () => {
+            // Add Data Source
+            map.addSource('biomes', {
+                'type': 'geojson',
+                'data': biomesGeoJSON
+            });
+
+            // Add Glowing Circles Layer
+            map.addLayer({
+                'id': 'biomes-circles',
+                'type': 'circle',
+                'source': 'biomes',
+                'paint': {
+                    'circle-radius': 45,
+                    'circle-color': '#10b981',
+                    'circle-opacity': 0.3,
+                    'circle-stroke-width': 3,
+                    'circle-stroke-color': '#10b981'
+                }
+            });
+
+            // Add Text Labels Layer
+            map.addLayer({
+                'id': 'biomes-labels',
+                'type': 'symbol',
+                'source': 'biomes',
+                'layout': {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Bold'],
+                    'text-size': 12,
+                    'text-offset': [0, 1.2],
+                    'text-anchor': 'top'
+                },
+                'paint': {
+                    'text-color': '#ffffff'
+                }
+            });
+        });
+
+        // Function to dynamically change map colors during simulation
+        function setMapColor(color) {
+            map.setPaintProperty('biomes-circles', 'circle-color', color);
+            map.setPaintProperty('biomes-circles', 'circle-stroke-color', color);
+        }
+
+        // Console Logging
+        function logToConsole(text, type = "normal") {
+            const consoleArea = document.getElementById('console-area');
+            const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+            let spanClass = "";
+            if (type === "alert") spanClass = "msg-alert";
+            if (type === "action") spanClass = "msg-action";
+            if (type === "success") spanClass = "msg-success";
+            const msgHtml = `<div class="console-msg"><span class="msg-time">[${time}]</span> <span class="${spanClass}">${text}</span></div>`;
+            consoleArea.innerHTML += msgHtml;
+            consoleArea.scrollTop = consoleArea.scrollHeight;
+        }
+
+        function updateStat(id, text, color) {
+            const el = document.getElementById(`stat-${id}`);
+            el.innerText = text;
+            el.style.color = color;
+        }
+
+        function runNationalSimulation() {
+            document.getElementById('sim-btn').disabled = true;
+            document.getElementById('ai-status').innerText = "● SCANNING...";
+            document.getElementById('ai-status').style.color = "#f59e0b";
+            
+            // Fly the 3D map for dynamic effect
+            map.flyTo({ zoom: 6.2, pitch: 60, bearing: 15, duration: 2000 });
+            
+            logToConsole("Initiating Sentinel-2, Hydrodynamic & AudioMoth Sensor sweep...", "action");
+
+            setTimeout(() => {
+                logToConsole("CRITICAL ANOMALIES DETECTED ACROSS 4 DOMAINS.", "alert");
+                
+                setMapColor('#ef4444'); // Turn map red
+                
+                updateStat('sylva', 'Beetle Swarm', '#ef4444');
+                updateStat('woda', 'Drought Risk', '#ef4444');
+                updateStat('ziemia', 'Toxic Leaching', '#ef4444');
+                updateStat('morze', 'Storm Surge & Algae', '#ef4444');
+
+                logToConsole("Sylva: AudioMoths detect ultrasonic signature of Ips typographus.", "alert");
+                logToConsole("Woda: IMGW telemetry forecasts 14-day rainfall deficit.", "alert");
+                logToConsole("Ziemia: Ground-sensors detect heavy metal dust spikes in Silesia.", "alert");
+                logToConsole("Morze: Hydrodynamic AI forecasts severe storm surge at Hel Peninsula, high nitrogen detected.", "alert");
+                
+            }, 2500);
+
+            setTimeout(() => {
+                document.getElementById('ai-status').innerText = "● DEPLOYING...";
+                document.getElementById('ai-status').style.color = "#38bdf8";
+
+                setMapColor('#38bdf8'); // Turn map blue
+
+                updateStat('sylva', 'Extracting', '#38bdf8');
+                updateStat('woda', 'Damming', '#38bdf8');
+                updateStat('ziemia', 'Seeding', '#38bdf8');
+                updateStat('morze', 'Reef Seeding', '#38bdf8');
+
+                logToConsole("Executing 'Silent Canopy' protocol. Dispatching Draft Horses to extract infected spruce.", "action");
+                logToConsole("Engaging IoT Zastawki actuators. Elevating streams by +0.5m for aquifer recharge.", "action");
+                logToConsole("Deploying Drone Swarms. Spraying hyper-accumulator seed-mix over Silesian Hałdy.", "action");
+                logToConsole("Deploying Baltic AUVs to seed 3D-printed fascine reefs with Blue Mussels for wave-breaking and bio-filtration.", "action");
+
+            }, 6000);
+
+            setTimeout(() => {
+                document.getElementById('ai-status').innerText = "● ONLINE";
+                document.getElementById('ai-status').style.color = "#10b981";
+                document.getElementById('sim-btn').disabled = false;
+                document.getElementById('sim-btn').innerText = "Re-Run Scan";
+
+                setMapColor('#10b981'); // Turn map green
+                map.flyTo({ zoom: 5.8, pitch: 50, bearing: 10, duration: 3000 }); // Reset view
+
+                updateStat('sylva', 'Equilibrium', '#10b981');
+                updateStat('woda', 'Equilibrium', '#10b981');
+                updateStat('ziemia', 'Equilibrium', '#10b981');
+                updateStat('morze', 'Equilibrium', '#10b981');
+
+                logToConsole("All interventions successful. Storm surges buffered. Groundwater stabilized.", "success");
+                logToConsole("Apex Equilibrium Restored. Returning to passive monitoring.", "success");
+
+            }, 10500);
+        }
+    </script>
+</body>
+</html>
