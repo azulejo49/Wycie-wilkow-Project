@@ -1,6 +1,5 @@
- <img src="badge.svg" width="340"/>
-
-  <br><br>
+<div align="center">
+  <img src="badge.svg" width="340"/>
 
   ![Data Engineering](https://img.shields.io/badge/Data_Engineering-0052CC?style=for-the-badge&logo=apache&logoColor=white)
   ![Machine Learning](https://img.shields.io/badge/Machine_Learning-FF6F00?style=for-the-badge&logo=scikit-learn&logoColor=white)
